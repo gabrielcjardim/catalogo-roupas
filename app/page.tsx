@@ -81,13 +81,17 @@ export default function Home() {
   const [mostrarCarrinho, setMostrarCarrinho] = useState(false);
   const [categoriaSelecionada, setCategoriaSelecionada] = useState("Todas");
   
-  // NOVA MEMÓRIA: Guarda o que o usuário está digitando
   const [termoBusca, setTermoBusca] = useState("");
   
   const [produtos, setProdutos] = useState<any[]>([]);
   const [carregando, setCarregando] = useState(true);
 
   const numeroWhatsApp = "5548998445112"; 
+
+  // --- FUNÇÃO PARA REMOVER ACENTOS ---
+  const removerAcentos = (texto: string) => {
+    return texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  };
 
   useEffect(() => {
     const carregarPlanilha = async () => {
@@ -140,18 +144,23 @@ export default function Home() {
 
   const categorias = ["Todas", ...Array.from(new Set(produtos.map((p) => p.categoria)))];
 
-  // NOVA LÓGICA DE FILTRO MÚLTIPLO: Junta a categoria com a busca
+  // --- NOVA LÓGICA DE FILTRO IGNORANDO ACENTOS E MAIÚSCULAS ---
   const produtosFiltrados = produtos.filter((p) => {
-    // 1. Verifica se passa no filtro de categoria
+    // 1. Filtro de categoria
     const matchCategoria = categoriaSelecionada === "Todas" || p.categoria === categoriaSelecionada;
     
-    // 2. Verifica se passa no filtro de busca (procura no nome OU na referência)
-    const buscaMinuscula = termoBusca.toLowerCase();
-    const matchBusca = termoBusca === "" || 
-      p.nome.toLowerCase().includes(buscaMinuscula) || 
-      p.referencia.toLowerCase().includes(buscaMinuscula);
+    // 2. Limpa o termo buscado (tira acentos e deixa minúsculo)
+    const buscaLimpa = removerAcentos(termoBusca.toLowerCase());
+    
+    // 3. Limpa o nome do produto e a referência
+    const nomeLimpo = removerAcentos(p.nome.toLowerCase());
+    const refLimpa = removerAcentos(p.referencia.toLowerCase());
 
-    // Só exibe se passar nos dois testes
+    // 4. Verifica se a busca bate
+    const matchBusca = termoBusca === "" || 
+      nomeLimpo.includes(buscaLimpa) || 
+      refLimpa.includes(buscaLimpa);
+
     return matchCategoria && matchBusca;
   });
 
@@ -240,7 +249,6 @@ export default function Home() {
         </button>
       </div>
 
-      {/* NOVO BLOCO: Barra de Busca */}
       <div className="mb-6 relative">
         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
           <span className="text-gray-500 text-lg">🔍</span>
@@ -278,7 +286,6 @@ export default function Home() {
         ))}
       </div>
       
-      {/* Verifica se a busca não encontrou nada */}
       {produtosFiltrados.length === 0 ? (
         <div className="text-center py-12 text-gray-500">
           <p className="text-xl">Ops! Nenhum produto encontrado com "{termoBusca}".</p>
