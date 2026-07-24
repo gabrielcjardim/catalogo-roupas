@@ -12,75 +12,55 @@ export default function Home() {
 
   const numeroWhatsApp = "5548998445112"; 
 
-  // --- NOVA LÓGICA: BUSCANDO DA PLANILHA EM FORMATO JSON (À Prova de falhas) ---
+  // --- BUSCANDO DO SEU LINK CSV PUBLICADO ---
   useEffect(() => {
     const carregarPlanilha = async () => {
       try {
-        const sheetId = "15pMsZwfo2kLay6cUy4RT3MsVWjCcyXSzPVWSFaALcGM";
-        // Usando o endpoint GViz do Google (retorna dados estruturados em vez de texto quebrado)
-        const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json`;
+        // Seu link oficial publicado
+        const url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRYE6JPgdDHYWWMf7l4owsGL2wCSFV18861ZiKv2ae_ooALvxTI5YVLtTXjLg5cKA2ljtoDa_u1GdG2/pub?output=csv";
         
         const resposta = await fetch(url);
-        const texto = await resposta.text();
+        const dadosCsv = await resposta.text();
         
-        // Limpa o prefixo estranho que o Google adiciona no retorno
-        const match = texto.match(/google\.visualization\.Query\.setResponse\(([\s\S\w]+)\)/);
-        
-        if (match && match[1]) {
-          const dados = JSON.parse(match[1]);
-          const linhas = dados.table.rows;
-          const produtosCarregados = [];
+        // Quebra o texto em linhas
+        const linhas = dadosCsv.split(/\r?\n/);
+        const produtosCarregados = [];
 
-          // O Google GViz já separa o cabeçalho, então as 'linhas' são apenas os dados puros.
-          // Se por acaso a linha 0 tiver "codprod", começamos da linha 1.
-          let inicio = 0;
-          if (linhas[0]?.c[0]?.v === "codprod") {
-            inicio = 1;
-          }
+        // Começamos do i = 1 para pular a linha 0 (cabeçalho)
+        for (let i = 1; i < linhas.length; i++) {
+          if (!linhas[i].trim()) continue; // Pula linhas em branco
 
-          for (let i = inicio; i < linhas.length; i++) {
-            const colunas = linhas[i].c;
-            
-            // Se a linha estiver vazia, pula
-            if (!colunas) continue;
-
-            // Função para pegar o valor da célula (evita erro se a célula estiver em branco)
-            const getValor = (index: number) => colunas[index] ? colunas[index].v : "";
-
-            const id = getValor(0); // Coluna A (codprod)
-            const nome = getValor(1); // Coluna B (nmprod)
-            const categoria = getValor(2); // Coluna C (categoria)
-            const referencia = getValor(3); // Coluna D (referencia)
-            const valorOriginal = getValor(4); // Coluna E (valor)
-            const ativo = String(getValor(5)).toUpperCase().trim(); // Coluna F (ativo)
-            const imagem = getValor(6); // Coluna G (Link da foto)
-
-            // Tratamento do preço (se for string com vírgula ou já vier como número)
-            let precoNum = 0;
-            if (typeof valorOriginal === 'number') {
-              precoNum = valorOriginal;
-            } else if (typeof valorOriginal === 'string') {
-              precoNum = parseFloat(valorOriginal.replace(',', '.'));
-            }
-
-            // O produto só entra na vitrine se tiver SIM, TRUE ou 1 na coluna F
-            if (ativo === 'SIM' || ativo === 'TRUE' || ativo === '1') {
-              produtosCarregados.push({
-                id: String(id),
-                nome: String(nome),
-                categoria: String(categoria) || "Geral",
-                referencia: String(referencia),
-                preco: precoNum || 0,
-                imagem: String(imagem)
-              });
-            }
-          }
+          // Esse "split" mágico separa as colunas por vírgula, 
+          // mas IGNORA as vírgulas que estiverem dentro do preço (ex: "49,90")
+          const colunas = linhas[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
           
-          setProdutos(produtosCarregados);
+          // Função rápida para tirar as aspas extras de dentro do texto
+          const limparTexto = (texto: string) => texto ? texto.replace(/(^"|"$)/g, '').trim() : '';
+
+          const ativo = limparTexto(colunas[5]).toUpperCase();
+
+          // Só adiciona o produto se a coluna F (ativo) for SIM
+          if (ativo === 'SIM' || ativo === 'TRUE' || ativo === '1') {
+            
+            // Pega o valor e troca a vírgula por ponto para o JavaScript entender como moeda
+            const valorRaw = limparTexto(colunas[4]);
+            const precoFormatado = parseFloat(valorRaw.replace(',', '.'));
+
+            produtosCarregados.push({
+              id: limparTexto(colunas[0]),             // A: codprod
+              nome: limparTexto(colunas[1]),           // B: nmprod
+              categoria: limparTexto(colunas[2]) || "Geral", // C: categoria
+              referencia: limparTexto(colunas[3]),     // D: referencia
+              preco: isNaN(precoFormatado) ? 0 : precoFormatado, // E: valor
+              imagem: limparTexto(colunas[6])          // G: Link da Foto
+            });
+          }
         }
+        
+        setProdutos(produtosCarregados);
         setCarregando(false);
       } catch (erro) {
-        console.error("Erro ao carregar planilha:", erro);
+        console.error("Erro ao carregar CSV:", erro);
         setCarregando(false);
       }
     };
@@ -88,12 +68,14 @@ export default function Home() {
     carregarPlanilha();
   }, []);
 
+  // --- FILTROS E CATEGORIAS ---
   const categorias = ["Todas", ...Array.from(new Set(produtos.map((p) => p.categoria)))];
 
   const produtosFiltrados = categoriaSelecionada === "Todas" 
     ? produtos 
     : produtos.filter((p) => p.categoria === categoriaSelecionada);
 
+  // --- LÓGICA DO CARRINHO ---
   const adicionarAoCarrinho = (produto: any) => {
     const itemExistente = carrinho.find((item) => item.id === produto.id);
     if (itemExistente) {
@@ -149,6 +131,7 @@ export default function Home() {
     window.open(link, '_blank');
   };
 
+  // --- TELA DE CARREGAMENTO ---
   if (carregando) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
@@ -158,12 +141,12 @@ export default function Home() {
     );
   }
 
-  // Tratamento visual para o caso de o carregamento terminar e a lista estiver vazia
+  // --- SE NÃO TIVER PRODUTOS ATIVOS ---
   if (!carregando && produtos.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
         <h2 className="mt-4 text-2xl font-bold text-gray-700">Nenhum produto ativo encontrado.</h2>
-        <p className="text-gray-500 mt-2">Verifique se a planilha está pública e com itens marcados como "SIM".</p>
+        <p className="text-gray-500 mt-2">Adicione produtos na planilha e marque a coluna Ativo como SIM.</p>
       </div>
     );
   }
@@ -210,7 +193,10 @@ export default function Home() {
             <div className="flex-grow">
               <h2 className="text-lg font-semibold text-gray-700">{produto.nome}</h2>
               <p className="text-sm text-gray-400 mb-2">{produto.categoria} | Ref: {produto.referencia}</p>
-              <p className="text-xl font-bold text-green-600 mb-4">R$ {produto.preco.toFixed(2)}</p>
+              <p className="text-xl font-bold text-green-600 mb-4">
+                {/* Formatação para mostrar sempre duas casas decimais com vírgula */}
+                R$ {produto.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
             </div>
             <button 
               onClick={() => adicionarAoCarrinho(produto)}
@@ -263,12 +249,12 @@ export default function Home() {
                         </button>
                         <span>{item.nome}</span>
                       </div>
-                      <span>R$ {(item.preco * item.quantidade).toFixed(2)}</span>
+                      <span>R$ {(item.preco * item.quantidade).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     </div>
                     
                     <div className="flex justify-between items-center mt-1 ml-6">
                       <span className="text-sm text-gray-500">
-                        Valor un. R$ {item.preco.toFixed(2)}
+                        Valor un. R$ {item.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </span>
                       <div className="flex items-center space-x-3 bg-gray-100 rounded-lg px-2 py-1">
                         <button 
@@ -292,7 +278,7 @@ export default function Home() {
               
               <div className="flex justify-between items-center mb-6 pt-2">
                 <span className="text-lg text-gray-600">Total Final:</span>
-                <span className="text-2xl font-bold text-green-600">R$ {calcularTotal().toFixed(2)}</span>
+                <span className="text-2xl font-bold text-green-600">R$ {calcularTotal().toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
               </div>
 
               <button 
