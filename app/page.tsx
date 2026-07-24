@@ -270,16 +270,12 @@ export default function Home() {
   return (
     /* Página principal */
     <main className="p-8 font-sans max-w-5xl mx-auto bg-gray-50 min-h-screen relative">
-      
-      /* inicio do banner */
 
       <div className="bg-green-500 text-white p-4 rounded-xl mb-8 shadow-md flex items-center justify-center">
         <p className="text-lg font-semibold">
           🌟 Confira nossa nova coleção de roupas! Aproveite as ofertas e novidades. 🌟
         </p>
       </div>
-
-      /* fim do banner */
 
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-4xl font-bold text-gray-800">Nossa Coleção 👗</h1>
