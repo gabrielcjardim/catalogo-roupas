@@ -12,47 +12,42 @@ export default function Home() {
 
   const numeroWhatsApp = "5548998445112"; 
 
-  // --- BUSCANDO DO SEU LINK CSV PUBLICADO ---
   useEffect(() => {
     const carregarPlanilha = async () => {
       try {
-        // Seu link oficial publicado
         const url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRYE6JPgdDHYWWMf7l4owsGL2wCSFV18861ZiKv2ae_ooALvxTI5YVLtTXjLg5cKA2ljtoDa_u1GdG2/pub?output=csv";
-        
         const resposta = await fetch(url);
         const dadosCsv = await resposta.text();
-        
-        // Quebra o texto em linhas
         const linhas = dadosCsv.split(/\r?\n/);
         const produtosCarregados = [];
 
-        // Começamos do i = 1 para pular a linha 0 (cabeçalho)
         for (let i = 1; i < linhas.length; i++) {
-          if (!linhas[i].trim()) continue; // Pula linhas em branco
+          if (!linhas[i].trim()) continue;
 
-          // Esse "split" mágico separa as colunas por vírgula, 
-          // mas IGNORA as vírgulas que estiverem dentro do preço (ex: "49,90")
           const colunas = linhas[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-          
-          // Função rápida para tirar as aspas extras de dentro do texto
           const limparTexto = (texto: string) => texto ? texto.replace(/(^"|"$)/g, '').trim() : '';
 
           const ativo = limparTexto(colunas[5]).toUpperCase();
 
-          // Só adiciona o produto se a coluna F (ativo) for SIM
           if (ativo === 'SIM' || ativo === 'TRUE' || ativo === '1') {
-            
-            // Pega o valor e troca a vírgula por ponto para o JavaScript entender como moeda
             const valorRaw = limparTexto(colunas[4]);
             const precoFormatado = parseFloat(valorRaw.replace(',', '.'));
+            
+            // LÓGICA NOVA: Separar os links das fotos pela barra " | "
+            const linksBrutos = limparTexto(colunas[6]);
+            const arrayFotos = linksBrutos
+              .split('|')
+              .map(img => img.trim())
+              .filter(img => img !== "" && img !== "Foto não encontrada");
 
             produtosCarregados.push({
-              id: limparTexto(colunas[0]),             // A: codprod
-              nome: limparTexto(colunas[1]),           // B: nmprod
-              categoria: limparTexto(colunas[2]) || "Geral", // C: categoria
-              referencia: limparTexto(colunas[3]),     // D: referencia
-              preco: isNaN(precoFormatado) ? 0 : precoFormatado, // E: valor
-              imagem: limparTexto(colunas[6])          // G: Link da Foto
+              id: limparTexto(colunas[0]),
+              nome: limparTexto(colunas[1]),
+              categoria: limparTexto(colunas[2]) || "Geral",
+              referencia: limparTexto(colunas[3]),
+              preco: isNaN(precoFormatado) ? 0 : precoFormatado,
+              // Salva a lista de fotos (se vier vazia, coloca uma imagem padrão)
+              imagens: arrayFotos.length > 0 ? arrayFotos : ["https://via.placeholder.com/500?text=Sem+Foto"]
             });
           }
         }
@@ -68,14 +63,12 @@ export default function Home() {
     carregarPlanilha();
   }, []);
 
-  // --- FILTROS E CATEGORIAS ---
   const categorias = ["Todas", ...Array.from(new Set(produtos.map((p) => p.categoria)))];
 
   const produtosFiltrados = categoriaSelecionada === "Todas" 
     ? produtos 
     : produtos.filter((p) => p.categoria === categoriaSelecionada);
 
-  // --- LÓGICA DO CARRINHO ---
   const adicionarAoCarrinho = (produto: any) => {
     const itemExistente = carrinho.find((item) => item.id === produto.id);
     if (itemExistente) {
@@ -131,7 +124,6 @@ export default function Home() {
     window.open(link, '_blank');
   };
 
-  // --- TELA DE CARREGAMENTO ---
   if (carregando) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
@@ -141,7 +133,6 @@ export default function Home() {
     );
   }
 
-  // --- SE NÃO TIVER PRODUTOS ATIVOS ---
   if (!carregando && produtos.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
@@ -181,20 +172,35 @@ export default function Home() {
       
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 mb-12">
         {produtosFiltrados.map((produto) => (
-          <div key={produto.id} className="bg-white border p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow flex flex-col">
+          <div key={produto.id} className="bg-white border p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow flex flex-col group">
             
-            <img 
-              src={produto.imagem || "https://via.placeholder.com/500?text=Sem+Foto"} 
-              alt={produto.nome}
-              className="h-48 w-full object-cover mb-4 rounded-lg border border-gray-100"
-              onError={(e) => { e.currentTarget.src = "https://via.placeholder.com/500?text=Erro+na+Foto" }}
-            />
+            {/* LÓGICA NOVA: Vitrine de Fotos com Efeito Hover */}
+            <div className="relative h-48 w-full mb-4 overflow-hidden rounded-lg border border-gray-100">
+              {/* FOTO 1 (Capa) */}
+              <img 
+                src={produto.imagens[0]} 
+                alt={produto.nome}
+                className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ease-in-out ${
+                  produto.imagens.length > 1 ? 'group-hover:opacity-0' : ''
+                }`}
+                onError={(e) => { e.currentTarget.src = "https://via.placeholder.com/500?text=Erro+na+Foto" }}
+              />
+              
+              {/* FOTO 2 (Aparece ao passar o mouse, se existir mais de 1 foto) */}
+              {produto.imagens.length > 1 && (
+                <img 
+                  src={produto.imagens[1]} 
+                  alt={`${produto.nome} detalhe`}
+                  className="absolute inset-0 h-full w-full object-cover opacity-0 transition-opacity duration-500 ease-in-out group-hover:opacity-100"
+                  onError={(e) => { e.currentTarget.src = produto.imagens[0] }} // Se der erro na foto 2, volta pra 1
+                />
+              )}
+            </div>
             
             <div className="flex-grow">
               <h2 className="text-lg font-semibold text-gray-700">{produto.nome}</h2>
               <p className="text-sm text-gray-400 mb-2">{produto.categoria} | Ref: {produto.referencia}</p>
               <p className="text-xl font-bold text-green-600 mb-4">
-                {/* Formatação para mostrar sempre duas casas decimais com vírgula */}
                 R$ {produto.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </div>
@@ -217,7 +223,6 @@ export default function Home() {
                 <button 
                   onClick={limparCarrinho}
                   className="text-gray-400 hover:text-red-600 text-sm flex items-center gap-1 bg-gray-100 px-2.5 py-1 rounded-lg transition-colors"
-                  title="Limpar carrinho"
                 >
                   🗑️ Limpar
                 </button>
@@ -243,7 +248,6 @@ export default function Home() {
                         <button 
                           onClick={() => removerDoCarrinho(item.id)}
                           className="text-red-400 hover:text-red-600 font-bold mr-2 text-sm px-1"
-                          title="Remover item"
                         >
                           ✕
                         </button>
