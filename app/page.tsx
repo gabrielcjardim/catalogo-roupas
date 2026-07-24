@@ -138,7 +138,7 @@ export default function Home() {
               categoria: limparTexto(colunas[2]) || "Geral",
               referencia: limparTexto(colunas[3]),
               preco: isNaN(precoFormatado) ? 0 : precoFormatado,
-              imagens: arrayFotos.length > 0 ? arrayFotos : ["https://via.placeholder.com/500?text=Sem+Foto"]
+              imagens: arrayFotos.length > 0 ? arrayFotos : ["https://drive.google.com/file/d/15E3hHHCBFRyL-AOXCV0NJ5MMGLhnZGBZ/view?usp=sharing"]
             });
           }
         }
