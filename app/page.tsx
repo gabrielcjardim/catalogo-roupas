@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from 'react';
 
-// --- NOVO COMPONENTE: Card de Produto com Carrossel Manual ---
+// --- COMPONENTE: Card de Produto com Carrossel Manual ---
 const ProdutoCard = ({ produto, adicionarAoCarrinho }: { produto: any, adicionarAoCarrinho: (p: any) => void }) => {
   const [indiceFoto, setIndiceFoto] = useState(0);
 
   const proximaFoto = (e: any) => {
-    e.stopPropagation(); // Evita que o clique na seta dispare outros eventos do card
+    e.stopPropagation();
     setIndiceFoto((prev) => (prev === produto.imagens.length - 1 ? 0 : prev + 1));
   };
 
@@ -19,7 +19,6 @@ const ProdutoCard = ({ produto, adicionarAoCarrinho }: { produto: any, adicionar
   return (
     <div className="bg-white border p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow flex flex-col group">
       
-      {/* Vitrine de Fotos com Carrossel */}
       <div className="relative h-48 w-full mb-4 overflow-hidden rounded-lg border border-gray-100 bg-gray-50 flex items-center justify-center">
         <img 
           src={produto.imagens[indiceFoto]} 
@@ -28,24 +27,22 @@ const ProdutoCard = ({ produto, adicionarAoCarrinho }: { produto: any, adicionar
           onError={(e) => { e.currentTarget.src = "https://via.placeholder.com/500?text=Erro+na+Foto" }}
         />
         
-        {/* Setas e Bolinhas só aparecem se houver mais de 1 foto */}
         {produto.imagens.length > 1 && (
           <>
             <button 
               onClick={fotoAnterior}
               className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 w-7 h-7 rounded-full flex justify-center items-center text-xs shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
             >
-              &#10094; {/* Seta para esquerda */}
+              &#10094;
             </button>
             
             <button 
               onClick={proximaFoto}
               className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 w-7 h-7 rounded-full flex justify-center items-center text-xs shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
             >
-              &#10095; {/* Seta para direita */}
+              &#10095;
             </button>
 
-            {/* Bolinhas indicadoras (Dots) */}
             <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5">
               {produto.imagens.map((_: any, index: number) => (
                 <div 
@@ -60,7 +57,6 @@ const ProdutoCard = ({ produto, adicionarAoCarrinho }: { produto: any, adicionar
         )}
       </div>
       
-      {/* Informações do Produto */}
       <div className="flex-grow">
         <h2 className="text-lg font-semibold text-gray-700">{produto.nome}</h2>
         <p className="text-sm text-gray-400 mb-2">{produto.categoria} | Ref: {produto.referencia}</p>
@@ -79,11 +75,14 @@ const ProdutoCard = ({ produto, adicionarAoCarrinho }: { produto: any, adicionar
   );
 };
 
-// --- COMPONENTE PRINCIPAL (Sua Página) ---
+// --- COMPONENTE PRINCIPAL ---
 export default function Home() {
   const [carrinho, setCarrinho] = useState<any[]>([]);
   const [mostrarCarrinho, setMostrarCarrinho] = useState(false);
   const [categoriaSelecionada, setCategoriaSelecionada] = useState("Todas");
+  
+  // NOVA MEMÓRIA: Guarda o que o usuário está digitando
+  const [termoBusca, setTermoBusca] = useState("");
   
   const [produtos, setProdutos] = useState<any[]>([]);
   const [carregando, setCarregando] = useState(true);
@@ -141,9 +140,20 @@ export default function Home() {
 
   const categorias = ["Todas", ...Array.from(new Set(produtos.map((p) => p.categoria)))];
 
-  const produtosFiltrados = categoriaSelecionada === "Todas" 
-    ? produtos 
-    : produtos.filter((p) => p.categoria === categoriaSelecionada);
+  // NOVA LÓGICA DE FILTRO MÚLTIPLO: Junta a categoria com a busca
+  const produtosFiltrados = produtos.filter((p) => {
+    // 1. Verifica se passa no filtro de categoria
+    const matchCategoria = categoriaSelecionada === "Todas" || p.categoria === categoriaSelecionada;
+    
+    // 2. Verifica se passa no filtro de busca (procura no nome OU na referência)
+    const buscaMinuscula = termoBusca.toLowerCase();
+    const matchBusca = termoBusca === "" || 
+      p.nome.toLowerCase().includes(buscaMinuscula) || 
+      p.referencia.toLowerCase().includes(buscaMinuscula);
+
+    // Só exibe se passar nos dois testes
+    return matchCategoria && matchBusca;
+  });
 
   const adicionarAoCarrinho = (produto: any) => {
     const itemExistente = carrinho.find((item) => item.id === produto.id);
@@ -229,6 +239,28 @@ export default function Home() {
           🛒 {quantidadeTotalItens} {quantidadeTotalItens === 1 ? 'peça' : 'peças'}
         </button>
       </div>
+
+      {/* NOVO BLOCO: Barra de Busca */}
+      <div className="mb-6 relative">
+        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+          <span className="text-gray-500 text-lg">🔍</span>
+        </div>
+        <input
+          type="text"
+          placeholder="Buscar produto por nome ou referência..."
+          value={termoBusca}
+          onChange={(e) => setTermoBusca(e.target.value)}
+          className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl shadow-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+        />
+        {termoBusca && (
+          <button 
+            onClick={() => setTermoBusca("")}
+            className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 font-bold"
+          >
+            ✕
+          </button>
+        )}
+      </div>
       
       <div className="flex gap-3 mb-8 overflow-x-auto pb-2">
         {categorias.map((categoria) => (
@@ -246,16 +278,22 @@ export default function Home() {
         ))}
       </div>
       
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 mb-12">
-        {/* ATUALIZADO: Renderizando o novo ProdutoCard */}
-        {produtosFiltrados.map((produto) => (
-          <ProdutoCard 
-            key={produto.id} 
-            produto={produto} 
-            adicionarAoCarrinho={adicionarAoCarrinho} 
-          />
-        ))}
-      </div>
+      {/* Verifica se a busca não encontrou nada */}
+      {produtosFiltrados.length === 0 ? (
+        <div className="text-center py-12 text-gray-500">
+          <p className="text-xl">Ops! Nenhum produto encontrado com "{termoBusca}".</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 mb-12">
+          {produtosFiltrados.map((produto) => (
+            <ProdutoCard 
+              key={produto.id} 
+              produto={produto} 
+              adicionarAoCarrinho={adicionarAoCarrinho} 
+            />
+          ))}
+        </div>
+      )}
 
       {mostrarCarrinho && (
         <div className="bg-white border-2 border-green-500 rounded-xl p-6 shadow-2xl w-full max-w-md fixed bottom-4 right-4 z-50">
