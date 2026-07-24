@@ -7,54 +7,77 @@ export default function Home() {
   const [mostrarCarrinho, setMostrarCarrinho] = useState(false);
   const [categoriaSelecionada, setCategoriaSelecionada] = useState("Todas");
   
-  // NOVOS ESTADOS: Lista de produtos dinâmica e status de carregamento
   const [produtos, setProdutos] = useState<any[]>([]);
   const [carregando, setCarregando] = useState(true);
 
   const numeroWhatsApp = "5548998445112"; 
 
-  // --- NOVA LÓGICA: BUSCANDO DA PLANILHA ---
+  // --- NOVA LÓGICA: BUSCANDO DA PLANILHA EM FORMATO JSON (À Prova de falhas) ---
   useEffect(() => {
     const carregarPlanilha = async () => {
       try {
-        // ID da sua planilha do Google Sheets
         const sheetId = "15pMsZwfo2kLay6cUy4RT3MsVWjCcyXSzPVWSFaALcGM";
-        // URL mágica do Google que devolve a planilha em formato de texto (CSV)
-        const url = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`;
+        // Usando o endpoint GViz do Google (retorna dados estruturados em vez de texto quebrado)
+        const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json`;
         
         const resposta = await fetch(url);
-        const dadosCsv = await resposta.text();
+        const texto = await resposta.text();
         
-        // Divide o texto por linhas
-        const linhas = dadosCsv.split('\n');
-        const produtosCarregados = [];
+        // Limpa o prefixo estranho que o Google adiciona no retorno
+        const match = texto.match(/google\.visualization\.Query\.setResponse\(([\s\S\w]+)\)/);
+        
+        if (match && match[1]) {
+          const dados = JSON.parse(match[1]);
+          const linhas = dados.table.rows;
+          const produtosCarregados = [];
 
-        // Pula a primeira linha (cabeçalho) e começa da linha 1
-        for (let i = 1; i < linhas.length; i++) {
-          // Expressão para separar as colunas por vírgula, ignorando vírgulas dentro de textos
-          const colunas = linhas[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-          
-          if (colunas.length < 6) continue;
-
-          // Função rápida para limpar aspas extras que o CSV pode gerar
-          const limparTexto = (texto: string) => texto ? texto.replace(/(^"|"$)/g, '').trim() : '';
-
-          const ativo = limparTexto(colunas[5]).toUpperCase();
-          
-          // Só adiciona na vitrine se a coluna "ativo" for SIM
-          if (ativo === 'SIM' || ativo === 'TRUE' || ativo === '1') {
-            produtosCarregados.push({
-              id: limparTexto(colunas[0]), // codprod
-              nome: limparTexto(colunas[1]), // nmprod
-              categoria: limparTexto(colunas[2]),
-              referencia: limparTexto(colunas[3]),
-              preco: parseFloat(limparTexto(colunas[4]).replace(',', '.')), // valor (garante que é número)
-              imagem: limparTexto(colunas[6]) // A foto gerada pelo nosso robô!
-            });
+          // O Google GViz já separa o cabeçalho, então as 'linhas' são apenas os dados puros.
+          // Se por acaso a linha 0 tiver "codprod", começamos da linha 1.
+          let inicio = 0;
+          if (linhas[0]?.c[0]?.v === "codprod") {
+            inicio = 1;
           }
+
+          for (let i = inicio; i < linhas.length; i++) {
+            const colunas = linhas[i].c;
+            
+            // Se a linha estiver vazia, pula
+            if (!colunas) continue;
+
+            // Função para pegar o valor da célula (evita erro se a célula estiver em branco)
+            const getValor = (index: number) => colunas[index] ? colunas[index].v : "";
+
+            const id = getValor(0); // Coluna A (codprod)
+            const nome = getValor(1); // Coluna B (nmprod)
+            const categoria = getValor(2); // Coluna C (categoria)
+            const referencia = getValor(3); // Coluna D (referencia)
+            const valorOriginal = getValor(4); // Coluna E (valor)
+            const ativo = String(getValor(5)).toUpperCase().trim(); // Coluna F (ativo)
+            const imagem = getValor(6); // Coluna G (Link da foto)
+
+            // Tratamento do preço (se for string com vírgula ou já vier como número)
+            let precoNum = 0;
+            if (typeof valorOriginal === 'number') {
+              precoNum = valorOriginal;
+            } else if (typeof valorOriginal === 'string') {
+              precoNum = parseFloat(valorOriginal.replace(',', '.'));
+            }
+
+            // O produto só entra na vitrine se tiver SIM, TRUE ou 1 na coluna F
+            if (ativo === 'SIM' || ativo === 'TRUE' || ativo === '1') {
+              produtosCarregados.push({
+                id: String(id),
+                nome: String(nome),
+                categoria: String(categoria) || "Geral",
+                referencia: String(referencia),
+                preco: precoNum || 0,
+                imagem: String(imagem)
+              });
+            }
+          }
+          
+          setProdutos(produtosCarregados);
         }
-        
-        setProdutos(produtosCarregados);
         setCarregando(false);
       } catch (erro) {
         console.error("Erro ao carregar planilha:", erro);
@@ -65,14 +88,12 @@ export default function Home() {
     carregarPlanilha();
   }, []);
 
-  // --- INÍCIO DA LÓGICA DO FILTRO ---
   const categorias = ["Todas", ...Array.from(new Set(produtos.map((p) => p.categoria)))];
 
   const produtosFiltrados = categoriaSelecionada === "Todas" 
     ? produtos 
     : produtos.filter((p) => p.categoria === categoriaSelecionada);
 
-  // --- LÓGICA DO CARRINHO (Mantida igual a sua) ---
   const adicionarAoCarrinho = (produto: any) => {
     const itemExistente = carrinho.find((item) => item.id === produto.id);
     if (itemExistente) {
@@ -128,12 +149,21 @@ export default function Home() {
     window.open(link, '_blank');
   };
 
-  // --- TELA DE CARREGAMENTO ENQUANTO LÊ A PLANILHA ---
   if (carregando) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
         <div className="w-16 h-16 border-4 border-green-500 border-t-transparent rounded-full animate-spin"></div>
         <h2 className="mt-4 text-xl font-bold text-gray-700">Carregando Coleção...</h2>
+      </div>
+    );
+  }
+
+  // Tratamento visual para o caso de o carregamento terminar e a lista estiver vazia
+  if (!carregando && produtos.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
+        <h2 className="mt-4 text-2xl font-bold text-gray-700">Nenhum produto ativo encontrado.</h2>
+        <p className="text-gray-500 mt-2">Verifique se a planilha está pública e com itens marcados como "SIM".</p>
       </div>
     );
   }
@@ -170,7 +200,6 @@ export default function Home() {
         {produtosFiltrados.map((produto) => (
           <div key={produto.id} className="bg-white border p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow flex flex-col">
             
-            {/* Foto dinâmica vindo do Drive */}
             <img 
               src={produto.imagem || "https://via.placeholder.com/500?text=Sem+Foto"} 
               alt={produto.nome}
@@ -193,7 +222,6 @@ export default function Home() {
         ))}
       </div>
 
-      {/* O SEU MODAL DE CARRINHO CONTINUA AQUI SEM ALTERAÇÕES */}
       {mostrarCarrinho && (
         <div className="bg-white border-2 border-green-500 rounded-xl p-6 shadow-2xl w-full max-w-md fixed bottom-4 right-4 z-50">
           <div className="flex justify-between items-center mb-4">
