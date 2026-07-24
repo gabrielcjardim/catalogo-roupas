@@ -88,7 +88,6 @@ export default function Home() {
 
   const numeroWhatsApp = "5548998445112"; 
 
-  // --- FUNÇÃO PARA REMOVER ACENTOS ---
   const removerAcentos = (texto: string) => {
     return texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   };
@@ -144,19 +143,13 @@ export default function Home() {
 
   const categorias = ["Todas", ...Array.from(new Set(produtos.map((p) => p.categoria)))];
 
-  // --- NOVA LÓGICA DE FILTRO IGNORANDO ACENTOS E MAIÚSCULAS ---
   const produtosFiltrados = produtos.filter((p) => {
-    // 1. Filtro de categoria
     const matchCategoria = categoriaSelecionada === "Todas" || p.categoria === categoriaSelecionada;
     
-    // 2. Limpa o termo buscado (tira acentos e deixa minúsculo)
     const buscaLimpa = removerAcentos(termoBusca.toLowerCase());
-    
-    // 3. Limpa o nome do produto e a referência
     const nomeLimpo = removerAcentos(p.nome.toLowerCase());
     const refLimpa = removerAcentos(p.referencia.toLowerCase());
 
-    // 4. Verifica se a busca bate
     const matchBusca = termoBusca === "" || 
       nomeLimpo.includes(buscaLimpa) || 
       refLimpa.includes(buscaLimpa);
@@ -206,16 +199,44 @@ export default function Home() {
 
   const quantidadeTotalItens = carrinho.reduce((total, item) => total + item.quantidade, 0);
 
+  // --- NOVA LÓGICA DE VERIFICAÇÃO ANTES DE FINALIZAR NO WHATSAPP ---
   const finalizarPedido = () => {
     if (carrinho.length === 0) return;
+
+    const itensAtivos = [];
+    const itensInativos = [];
+
+    // Verifica item por item se ainda existe na lista atual de produtos ativos
+    carrinho.forEach((item) => {
+      const aindaAtivo = produtos.some((p) => p.id === item.id);
+      if (aindaAtivo) {
+        itensAtivos.push(item);
+      } else {
+        itensInativos.push(item);
+      }
+    });
+
+    // Se houver algum item inativo/removido, avisa o usuário e atualiza o carrinho
+    if (itensInativos.length > 0) {
+      const nomesInativos = itensInativos.map((i) => i.nome).join(', ');
+      alert(`⚠️ Atenção: O(s) seguinte(s) item(ns) ficou(aram) inativo(s) ou indisponível(is) e foi(ram) removido(s) do seu carrinho:\n\n${nomesInativos}`);
+      
+      setCarrinho(itensAtivos);
+      return; // Interrompe o envio para o WhatsApp para o cliente revisar
+    }
+
+    // Se tudo estiver OK, prossegue com o envio normal
     let texto = "Olá! Gostaria de fechar o seguinte pedido:\n\n";
     carrinho.forEach((item) => {
       const subtotalItem = item.preco * item.quantidade;
       texto += `🛍️ ${item.quantidade}x *${item.nome}* - R$ ${subtotalItem.toFixed(2)}\n`;
     });
+    
     texto += `\n💰 *Total do Orçamento: R$ ${calcularTotal().toFixed(2)}*`;
+    
     const textoCodificado = encodeURIComponent(texto);
     const link = `https://wa.me/${numeroWhatsApp}?text=${textoCodificado}`;
+    
     window.open(link, '_blank');
   };
 
