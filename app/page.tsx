@@ -2,6 +2,84 @@
 
 import { useState, useEffect } from 'react';
 
+// --- NOVO COMPONENTE: Card de Produto com Carrossel Manual ---
+const ProdutoCard = ({ produto, adicionarAoCarrinho }: { produto: any, adicionarAoCarrinho: (p: any) => void }) => {
+  const [indiceFoto, setIndiceFoto] = useState(0);
+
+  const proximaFoto = (e: any) => {
+    e.stopPropagation(); // Evita que o clique na seta dispare outros eventos do card
+    setIndiceFoto((prev) => (prev === produto.imagens.length - 1 ? 0 : prev + 1));
+  };
+
+  const fotoAnterior = (e: any) => {
+    e.stopPropagation();
+    setIndiceFoto((prev) => (prev === 0 ? produto.imagens.length - 1 : prev - 1));
+  };
+
+  return (
+    <div className="bg-white border p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow flex flex-col group">
+      
+      {/* Vitrine de Fotos com Carrossel */}
+      <div className="relative h-48 w-full mb-4 overflow-hidden rounded-lg border border-gray-100 bg-gray-50 flex items-center justify-center">
+        <img 
+          src={produto.imagens[indiceFoto]} 
+          alt={`${produto.nome} - Foto ${indiceFoto + 1}`}
+          className="absolute inset-0 h-full w-full object-cover transition-all duration-300"
+          onError={(e) => { e.currentTarget.src = "https://via.placeholder.com/500?text=Erro+na+Foto" }}
+        />
+        
+        {/* Setas e Bolinhas só aparecem se houver mais de 1 foto */}
+        {produto.imagens.length > 1 && (
+          <>
+            <button 
+              onClick={fotoAnterior}
+              className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 w-7 h-7 rounded-full flex justify-center items-center text-xs shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
+            >
+              &#10094; {/* Seta para esquerda */}
+            </button>
+            
+            <button 
+              onClick={proximaFoto}
+              className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 w-7 h-7 rounded-full flex justify-center items-center text-xs shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
+            >
+              &#10095; {/* Seta para direita */}
+            </button>
+
+            {/* Bolinhas indicadoras (Dots) */}
+            <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5">
+              {produto.imagens.map((_: any, index: number) => (
+                <div 
+                  key={index} 
+                  className={`h-1.5 rounded-full transition-all shadow-sm ${
+                    index === indiceFoto ? 'w-3 bg-gray-800' : 'w-1.5 bg-gray-300/80'
+                  }`}
+                />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+      
+      {/* Informações do Produto */}
+      <div className="flex-grow">
+        <h2 className="text-lg font-semibold text-gray-700">{produto.nome}</h2>
+        <p className="text-sm text-gray-400 mb-2">{produto.categoria} | Ref: {produto.referencia}</p>
+        <p className="text-xl font-bold text-green-600 mb-4">
+          R$ {produto.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        </p>
+      </div>
+      
+      <button 
+        onClick={() => adicionarAoCarrinho(produto)}
+        className="w-full bg-gray-100 text-gray-800 border border-gray-300 py-2 rounded-lg font-medium hover:bg-gray-200 transition-colors mt-auto active:bg-gray-300"
+      >
+        Adicionar
+      </button>
+    </div>
+  );
+};
+
+// --- COMPONENTE PRINCIPAL (Sua Página) ---
 export default function Home() {
   const [carrinho, setCarrinho] = useState<any[]>([]);
   const [mostrarCarrinho, setMostrarCarrinho] = useState(false);
@@ -33,7 +111,6 @@ export default function Home() {
             const valorRaw = limparTexto(colunas[4]);
             const precoFormatado = parseFloat(valorRaw.replace(',', '.'));
             
-            // LÓGICA NOVA: Separar os links das fotos pela barra " | "
             const linksBrutos = limparTexto(colunas[6]);
             const arrayFotos = linksBrutos
               .split('|')
@@ -46,7 +123,6 @@ export default function Home() {
               categoria: limparTexto(colunas[2]) || "Geral",
               referencia: limparTexto(colunas[3]),
               preco: isNaN(precoFormatado) ? 0 : precoFormatado,
-              // Salva a lista de fotos (se vier vazia, coloca uma imagem padrão)
               imagens: arrayFotos.length > 0 ? arrayFotos : ["https://via.placeholder.com/500?text=Sem+Foto"]
             });
           }
@@ -171,46 +247,13 @@ export default function Home() {
       </div>
       
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 mb-12">
+        {/* ATUALIZADO: Renderizando o novo ProdutoCard */}
         {produtosFiltrados.map((produto) => (
-          <div key={produto.id} className="bg-white border p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow flex flex-col group">
-            
-            {/* LÓGICA NOVA: Vitrine de Fotos com Efeito Hover */}
-            <div className="relative h-48 w-full mb-4 overflow-hidden rounded-lg border border-gray-100">
-              {/* FOTO 1 (Capa) */}
-              <img 
-                src={produto.imagens[0]} 
-                alt={produto.nome}
-                className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ease-in-out ${
-                  produto.imagens.length > 1 ? 'group-hover:opacity-0' : ''
-                }`}
-                onError={(e) => { e.currentTarget.src = "https://via.placeholder.com/500?text=Erro+na+Foto" }}
-              />
-              
-              {/* FOTO 2 (Aparece ao passar o mouse, se existir mais de 1 foto) */}
-              {produto.imagens.length > 1 && (
-                <img 
-                  src={produto.imagens[1]} 
-                  alt={`${produto.nome} detalhe`}
-                  className="absolute inset-0 h-full w-full object-cover opacity-0 transition-opacity duration-500 ease-in-out group-hover:opacity-100"
-                  onError={(e) => { e.currentTarget.src = produto.imagens[0] }} // Se der erro na foto 2, volta pra 1
-                />
-              )}
-            </div>
-            
-            <div className="flex-grow">
-              <h2 className="text-lg font-semibold text-gray-700">{produto.nome}</h2>
-              <p className="text-sm text-gray-400 mb-2">{produto.categoria} | Ref: {produto.referencia}</p>
-              <p className="text-xl font-bold text-green-600 mb-4">
-                R$ {produto.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </p>
-            </div>
-            <button 
-              onClick={() => adicionarAoCarrinho(produto)}
-              className="w-full bg-gray-100 text-gray-800 border border-gray-300 py-2 rounded-lg font-medium hover:bg-gray-200 transition-colors mt-auto active:bg-gray-300"
-            >
-              Adicionar
-            </button>
-          </div>
+          <ProdutoCard 
+            key={produto.id} 
+            produto={produto} 
+            adicionarAoCarrinho={adicionarAoCarrinho} 
+          />
         ))}
       </div>
 
