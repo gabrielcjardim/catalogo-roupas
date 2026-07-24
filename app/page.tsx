@@ -1,17 +1,30 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, MouseEvent } from 'react';
+
+interface Produto {
+  id: string;
+  nome: string;
+  categoria: string;
+  referencia: string;
+  preco: number;
+  imagens: string[];
+}
+
+interface CarrinhoItem extends Produto {
+  quantidade: number;
+}
 
 // --- COMPONENTE: Card de Produto com Carrossel Manual ---
-const ProdutoCard = ({ produto, adicionarAoCarrinho }: { produto: any, adicionarAoCarrinho: (p: any) => void }) => {
+const ProdutoCard = ({ produto, adicionarAoCarrinho }: { produto: Produto, adicionarAoCarrinho: (p: Produto) => void }) => {
   const [indiceFoto, setIndiceFoto] = useState(0);
 
-  const proximaFoto = (e: any) => {
+  const proximaFoto = (e: MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     setIndiceFoto((prev) => (prev === produto.imagens.length - 1 ? 0 : prev + 1));
   };
 
-  const fotoAnterior = (e: any) => {
+  const fotoAnterior = (e: MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     setIndiceFoto((prev) => (prev === 0 ? produto.imagens.length - 1 : prev - 1));
   };
@@ -24,7 +37,7 @@ const ProdutoCard = ({ produto, adicionarAoCarrinho }: { produto: any, adicionar
           src={produto.imagens[indiceFoto]} 
           alt={`${produto.nome} - Foto ${indiceFoto + 1}`}
           className="absolute inset-0 h-full w-full object-cover transition-all duration-300"
-          onError={(e) => { e.currentTarget.src = "https://via.placeholder.com/500?text=Erro+na+Foto" }}
+          onError={(e) => { (e.currentTarget as HTMLImageElement).src = "https://via.placeholder.com/500?text=Erro+na+Foto" }}
         />
         
         {produto.imagens.length > 1 && (
@@ -44,7 +57,7 @@ const ProdutoCard = ({ produto, adicionarAoCarrinho }: { produto: any, adicionar
             </button>
 
             <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5">
-              {produto.imagens.map((_: any, index: number) => (
+              {produto.imagens.map((_, index: number) => (
                 <div 
                   key={index} 
                   className={`h-1.5 rounded-full transition-all shadow-sm ${
@@ -77,13 +90,13 @@ const ProdutoCard = ({ produto, adicionarAoCarrinho }: { produto: any, adicionar
 
 // --- COMPONENTE PRINCIPAL ---
 export default function Home() {
-  const [carrinho, setCarrinho] = useState<any[]>([]);
+  const [carrinho, setCarrinho] = useState<CarrinhoItem[]>([]);
   const [mostrarCarrinho, setMostrarCarrinho] = useState(false);
   const [categoriaSelecionada, setCategoriaSelecionada] = useState("Todas");
   
   const [termoBusca, setTermoBusca] = useState("");
   
-  const [produtos, setProdutos] = useState<any[]>([]);
+  const [produtos, setProdutos] = useState<Produto[]>([]);
   const [carregando, setCarregando] = useState(true);
 
   const numeroWhatsApp = "5548998445112"; 
@@ -99,7 +112,7 @@ export default function Home() {
         const resposta = await fetch(url);
         const dadosCsv = await resposta.text();
         const linhas = dadosCsv.split(/\r?\n/);
-        const produtosCarregados = [];
+        const produtosCarregados: Produto[] = [];
 
         for (let i = 1; i < linhas.length; i++) {
           if (!linhas[i].trim()) continue;
@@ -157,7 +170,7 @@ export default function Home() {
     return matchCategoria && matchBusca;
   });
 
-  const adicionarAoCarrinho = (produto: any) => {
+  const adicionarAoCarrinho = (produto: Produto) => {
     const itemExistente = carrinho.find((item) => item.id === produto.id);
     if (itemExistente) {
       const novoCarrinho = carrinho.map((item) => 
@@ -199,14 +212,12 @@ export default function Home() {
 
   const quantidadeTotalItens = carrinho.reduce((total, item) => total + item.quantidade, 0);
 
-  // --- NOVA LÓGICA DE VERIFICAÇÃO ANTES DE FINALIZAR NO WHATSAPP ---
   const finalizarPedido = () => {
     if (carrinho.length === 0) return;
 
-    const itensAtivos = [];
-    const itensInativos = [];
+    const itensAtivos: CarrinhoItem[] = [];
+    const itensInativos: CarrinhoItem[] = [];
 
-    // Verifica item por item se ainda existe na lista atual de produtos ativos
     carrinho.forEach((item) => {
       const aindaAtivo = produtos.some((p) => p.id === item.id);
       if (aindaAtivo) {
@@ -216,16 +227,14 @@ export default function Home() {
       }
     });
 
-    // Se houver algum item inativo/removido, avisa o usuário e atualiza o carrinho
     if (itensInativos.length > 0) {
       const nomesInativos = itensInativos.map((i) => i.nome).join(', ');
       alert(`⚠️ Atenção: O(s) seguinte(s) item(ns) ficou(aram) inativo(s) ou indisponível(is) e foi(ram) removido(s) do seu carrinho:\n\n${nomesInativos}`);
       
       setCarrinho(itensAtivos);
-      return; // Interrompe o envio para o WhatsApp para o cliente revisar
+      return;
     }
 
-    // Se tudo estiver OK, prossegue com o envio normal
     let texto = "Olá! Gostaria de fechar o seguinte pedido:\n\n";
     carrinho.forEach((item) => {
       const subtotalItem = item.preco * item.quantidade;
