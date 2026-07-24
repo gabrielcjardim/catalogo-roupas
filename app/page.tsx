@@ -5,153 +5,151 @@ import { useState, useEffect } from 'react';
 export default function Home() {
   const [carrinho, setCarrinho] = useState<any[]>([]);
   const [mostrarCarrinho, setMostrarCarrinho] = useState(false);
-  // NOVA MEMÓRIA: Guarda a categoria que está selecionada no momento. Começa com "Todas".
   const [categoriaSelecionada, setCategoriaSelecionada] = useState("Todas");
+  
+  // NOVOS ESTADOS: Lista de produtos dinâmica e status de carregamento
+  const [produtos, setProdutos] = useState<any[]>([]);
+  const [carregando, setCarregando] = useState(true);
 
   const numeroWhatsApp = "5548998445112"; 
 
-  const produtos = [
-    { 
-      id: 1, 
-      nome: "Camiseta Básica Branca", 
-      preco: 49.90, 
-      categoria: "Camisetas", 
-      imagem: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=500&q=80" 
-    },
-    { 
-      id: 2, 
-      nome: "Calça Jeans Skinny", 
-      preco: 129.90, 
-      categoria: "Calças", 
-      imagem: "https://images.unsplash.com/photo-1541099649105-f69ad21f3246?w=500&q=80" 
-    },
-    { 
-      id: 3, 
-      nome: "Vestido de Verão Floral", 
-      preco: 159.90, 
-      categoria: "Vestidos", 
-      imagem: "https://images.unsplash.com/photo-1572804013309-59a88b7e92f1?w=500&q=80" 
-    },
-    { 
-      id: 4, 
-      nome: "Jaqueta de Couro Fake", 
-      preco: 249.90, 
-      categoria: "Casacos", 
-      imagem: "https://images.unsplash.com/photo-1551028719-00167b16eac5?w=500&q=80" 
-    }
-  ];
+  // --- NOVA LÓGICA: BUSCANDO DA PLANILHA ---
+  useEffect(() => {
+    const carregarPlanilha = async () => {
+      try {
+        // ID da sua planilha do Google Sheets
+        const sheetId = "15pMsZwfo2kLay6cUy4RT3MsVWjCcyXSzPVWSFaALcGM";
+        // URL mágica do Google que devolve a planilha em formato de texto (CSV)
+        const url = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`;
+        
+        const resposta = await fetch(url);
+        const dadosCsv = await resposta.text();
+        
+        // Divide o texto por linhas
+        const linhas = dadosCsv.split('\n');
+        const produtosCarregados = [];
+
+        // Pula a primeira linha (cabeçalho) e começa da linha 1
+        for (let i = 1; i < linhas.length; i++) {
+          // Expressão para separar as colunas por vírgula, ignorando vírgulas dentro de textos
+          const colunas = linhas[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+          
+          if (colunas.length < 6) continue;
+
+          // Função rápida para limpar aspas extras que o CSV pode gerar
+          const limparTexto = (texto: string) => texto ? texto.replace(/(^"|"$)/g, '').trim() : '';
+
+          const ativo = limparTexto(colunas[5]).toUpperCase();
+          
+          // Só adiciona na vitrine se a coluna "ativo" for SIM
+          if (ativo === 'SIM' || ativo === 'TRUE' || ativo === '1') {
+            produtosCarregados.push({
+              id: limparTexto(colunas[0]), // codprod
+              nome: limparTexto(colunas[1]), // nmprod
+              categoria: limparTexto(colunas[2]),
+              referencia: limparTexto(colunas[3]),
+              preco: parseFloat(limparTexto(colunas[4]).replace(',', '.')), // valor (garante que é número)
+              imagem: limparTexto(colunas[6]) // A foto gerada pelo nosso robô!
+            });
+          }
+        }
+        
+        setProdutos(produtosCarregados);
+        setCarregando(false);
+      } catch (erro) {
+        console.error("Erro ao carregar planilha:", erro);
+        setCarregando(false);
+      }
+    };
+
+    carregarPlanilha();
+  }, []);
 
   // --- INÍCIO DA LÓGICA DO FILTRO ---
-  
-  // 1. Cria uma lista automática com o nome das categorias (sem repetir) e adiciona o botão "Todas"
   const categorias = ["Todas", ...Array.from(new Set(produtos.map((p) => p.categoria)))];
 
-  // 2. Filtra os produtos. Se for "Todas", mostra tudo. Se não, mostra só os da categoria clicada.
   const produtosFiltrados = categoriaSelecionada === "Todas" 
     ? produtos 
     : produtos.filter((p) => p.categoria === categoriaSelecionada);
 
-  // --- FIM DA LÓGICA DO FILTRO ---
-
-  // --- NOVA LÓGICA DE AGRUPAMENTO ---
+  // --- LÓGICA DO CARRINHO (Mantida igual a sua) ---
   const adicionarAoCarrinho = (produto: any) => {
-    // 1. Procura se o item já existe no carrinho atual
     const itemExistente = carrinho.find((item) => item.id === produto.id);
-
     if (itemExistente) {
-      // 2. Se existe, criamos um carrinho novo somando +1 na quantidade apenas dele
       const novoCarrinho = carrinho.map((item) => 
-        item.id === produto.id 
-          ? { ...item, quantidade: item.quantidade + 1 } 
-          : item
+        item.id === produto.id ? { ...item, quantidade: item.quantidade + 1 } : item
       );
       setCarrinho(novoCarrinho);
     } else {
-      // 3. Se não existe, adicionamos com a propriedade "quantidade: 1"
       setCarrinho([...carrinho, { ...produto, quantidade: 1 }]);
     }
   };
-  // --- INÍCIO DO NOVO BLOCO LÓGICO ---
 
-  // 1. Carrega o carrinho salvo no navegador assim que a página abre
   useEffect(() => {
     const carrinhoSalvo = localStorage.getItem('meu-catalogo-carrinho');
-    if (carrinhoSalvo) {
-      setCarrinho(JSON.parse(carrinhoSalvo));
-    }
+    if (carrinhoSalvo) setCarrinho(JSON.parse(carrinhoSalvo));
   }, []);
 
-  // 2. Salva o carrinho no navegador toda vez que ele sofrer alguma alteração
   useEffect(() => {
     localStorage.setItem('meu-catalogo-carrinho', JSON.stringify(carrinho));
   }, [carrinho]);
 
-  // 3. Função para diminuir itens (se chegar a zero, remove do carrinho)
-  const diminuirQuantidade = (id: number) => {
+  const diminuirQuantidade = (id: string) => {
     const novoCarrinho = carrinho.map((item) => {
-      if (item.id === id) {
-        return { ...item, quantidade: item.quantidade - 1 };
-      }
+      if (item.id === id) return { ...item, quantidade: item.quantidade - 1 };
       return item;
-    }).filter((item) => item.quantidade > 0); // Mantém na lista só o que for maior que zero
-
+    }).filter((item) => item.quantidade > 0);
     setCarrinho(novoCarrinho);
   };
-  // 4. Função para remover o item completamente do carrinho
-  const removerDoCarrinho = (id: number) => {
+
+  const removerDoCarrinho = (id: string) => {
     const novoCarrinho = carrinho.filter((item) => item.id !== id);
     setCarrinho(novoCarrinho);
   };
-  // 5.Função para esvaziar o carrinho completamente
-  const limparCarrinho = () => {
-    setCarrinho([]);
-  };
 
-  // --- FIM DO NOVO BLOCO LÓGICO ---
-  // --- NOVOS CÁLCULOS ---
-  // Calcula o valor total financeiro (Preço x Quantidade de cada linha)
+  const limparCarrinho = () => setCarrinho([]);
+
   const calcularTotal = () => {
     return carrinho.reduce((total, item) => total + (item.preco * item.quantidade), 0);
   };
 
-  // Calcula a quantidade total de peças (para mostrar no botão do topo)
   const quantidadeTotalItens = carrinho.reduce((total, item) => total + item.quantidade, 0);
 
   const finalizarPedido = () => {
     if (carrinho.length === 0) return;
-
     let texto = "Olá! Gostaria de fechar o seguinte pedido:\n\n";
-    
-    // Atualizamos a mensagem do WhatsApp para mostrar a Quantidade e o Subtotal daquela linha
     carrinho.forEach((item) => {
       const subtotalItem = item.preco * item.quantidade;
       texto += `🛍️ ${item.quantidade}x *${item.nome}* - R$ ${subtotalItem.toFixed(2)}\n`;
     });
-    
     texto += `\n💰 *Total do Orçamento: R$ ${calcularTotal().toFixed(2)}*`;
-    
     const textoCodificado = encodeURIComponent(texto);
     const link = `https://wa.me/${numeroWhatsApp}?text=${textoCodificado}`;
-    
     window.open(link, '_blank');
   };
 
+  // --- TELA DE CARREGAMENTO ENQUANTO LÊ A PLANILHA ---
+  if (carregando) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
+        <div className="w-16 h-16 border-4 border-green-500 border-t-transparent rounded-full animate-spin"></div>
+        <h2 className="mt-4 text-xl font-bold text-gray-700">Carregando Coleção...</h2>
+      </div>
+    );
+  }
+
   return (
     <main className="p-8 font-sans max-w-5xl mx-auto bg-gray-50 min-h-screen relative">
-      
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-4xl font-bold text-gray-800">Nossa Coleção 👗</h1>
-        
         <button 
           onClick={() => setMostrarCarrinho(!mostrarCarrinho)}
           className="bg-gray-800 text-white px-4 py-2 rounded-lg font-bold shadow-md hover:bg-gray-700 transition-colors cursor-pointer"
         >
-          {/* Atualizamos para usar a nova contagem de peças */}
           🛒 {quantidadeTotalItens} {quantidadeTotalItens === 1 ? 'peça' : 'peças'}
         </button>
       </div>
       
-     {/* NOVO BLOCO: Botões de Filtro */}
       <div className="flex gap-3 mb-8 overflow-x-auto pb-2">
         {categorias.map((categoria) => (
           <button
@@ -168,21 +166,21 @@ export default function Home() {
         ))}
       </div>
       
-      {/* ATUALIZADO: Trocamos "produtos.map" por "produtosFiltrados.map" */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 mb-12">
         {produtosFiltrados.map((produto) => (
           <div key={produto.id} className="bg-white border p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow flex flex-col">
             
-            {/* NOVA LINHA: Aqui entra a foto real no lugar do quadrado cinza */}
+            {/* Foto dinâmica vindo do Drive */}
             <img 
-              src={produto.imagem} 
+              src={produto.imagem || "https://via.placeholder.com/500?text=Sem+Foto"} 
               alt={produto.nome}
               className="h-48 w-full object-cover mb-4 rounded-lg border border-gray-100"
+              onError={(e) => { e.currentTarget.src = "https://via.placeholder.com/500?text=Erro+na+Foto" }}
             />
             
             <div className="flex-grow">
               <h2 className="text-lg font-semibold text-gray-700">{produto.nome}</h2>
-              <p className="text-sm text-gray-400 mb-2">{produto.categoria}</p>
+              <p className="text-sm text-gray-400 mb-2">{produto.categoria} | Ref: {produto.referencia}</p>
               <p className="text-xl font-bold text-green-600 mb-4">R$ {produto.preco.toFixed(2)}</p>
             </div>
             <button 
@@ -195,13 +193,11 @@ export default function Home() {
         ))}
       </div>
 
+      {/* O SEU MODAL DE CARRINHO CONTINUA AQUI SEM ALTERAÇÕES */}
       {mostrarCarrinho && (
         <div className="bg-white border-2 border-green-500 rounded-xl p-6 shadow-2xl w-full max-w-md fixed bottom-4 right-4 z-50">
-          
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-bold text-gray-800">Seu Pedido</h2>
-            
-            {/* Bloco com o botão de Limpar Carrinho e o Fechar (X) */}
             <div className="flex items-center space-x-2">
               {carrinho.length > 0 && (
                 <button 
@@ -212,7 +208,6 @@ export default function Home() {
                   🗑️ Limpar
                 </button>
               )}
-              
               <button 
                 onClick={() => setMostrarCarrinho(false)}
                 className="text-gray-400 hover:text-gray-800 font-bold text-xl px-2"
@@ -229,8 +224,6 @@ export default function Home() {
               <ul className="mb-4 max-h-40 overflow-y-auto pr-2 space-y-3">
                 {carrinho.map((item, index) => (
                   <li key={index} className="flex flex-col text-gray-800 border-b pb-2">
-                    
-                    {/* ATUALIZADO: O "X" para remover entrou aqui, ao lado do nome */}
                     <div className="flex justify-between font-semibold items-start">
                       <div className="flex items-center">
                         <button 
@@ -249,7 +242,6 @@ export default function Home() {
                       <span className="text-sm text-gray-500">
                         Valor un. R$ {item.preco.toFixed(2)}
                       </span>
-                      
                       <div className="flex items-center space-x-3 bg-gray-100 rounded-lg px-2 py-1">
                         <button 
                           onClick={() => diminuirQuantidade(item.id)}
@@ -266,7 +258,6 @@ export default function Home() {
                         </button>
                       </div>
                     </div>
-
                   </li>
                 ))}
               </ul>
